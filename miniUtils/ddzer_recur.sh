@@ -44,8 +44,6 @@ check_unusual_file() {
     local file="$1"
     if [ -L "$file" ]; then
         echo "ВНИМАНИЕ: Найдена символическая ссылка: $file"
-    elif [ -d "$file" ]; then
-        echo "ВНИМАНИЕ: Найдена директория: $file"
     elif [ -c "$file" ]; then
         echo "ВНИМАНИЕ: Найдено символьное устройство: $file"
     elif [ -b "$file" ]; then
