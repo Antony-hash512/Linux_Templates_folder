@@ -29,14 +29,40 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# Функция для создания временного имени и переименования файла
+rename_to_temp() {
+  local path="$1"
+  local dir=$(dirname "$path")
+  local orig_len=${#path}
+  local tmp_name="$(tr -dc 'a-zA-Z0-9' < /dev/urandom | head -c 16)"
+  # Альтернатива для длинных путей
+  #local tmp_name="$(tr -dc 'a-zA-Z0-9' < /dev/urandom | head -c $(( orig_len < 16 ? 16 : orig_len )))"
+  # Убеждаемся что новое имя не короче оригинального
+  while [ ${#tmp_name} -lt ${#path} ]; do
+    tmp_name="${tmp_name}_"
+  done
+  # Добавляем суффикс .tmp и время unix чтобы точно избежать коллизий
+  tmp_name="${dir}/${tmp_name}_$(date +%s).tmp"
+  mv "$path" "$tmp_name"
+  if [ -d "$tmp_name" ]; then
+    echo "Каталог $path переименован в: $tmp_name"
+  else
+    echo "Файл $path переименован в: $tmp_name"
+  fi
+}
+
 # Функция для обработки файла
 process_file() {
   local file="$1"
+  # Получаем директорию, где находится файл
+
   size=$(stat --format=%s "$file")
   # Округление размера до ближайшего большего, кратного 4096
   rounded_size=$(( (size + 4095) / 4096 * 4096 ))
   dd if=/dev/$way of="$file" bs=4096 count=$((rounded_size / 4096)) status=none
   echo "Файл $file перезаписан $rounded_size $([ "$way" = "zero" ] && echo "нулями" || echo "случайными байтами")."
+
+  rename_to_temp "$file"
 }
 
 # Функция для оповещения пользователя о необычных файлах
