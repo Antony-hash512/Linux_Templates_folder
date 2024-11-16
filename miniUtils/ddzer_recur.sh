@@ -1,9 +1,10 @@
 #!/bin/bash
 
-# Устанавливаем значение по умолчанию
+# Устанавливаем значения по умолчанию
 random=false
 way="zero"
 files=()
+rename_main=false  # По умолчанию не переименовываем корневые каталоги
 
 # В начале скрипта определяем тип ОС
 OS_TYPE=${OS_TYPE:-"Linux"}  # По умолчанию Linux, но можно задать MacOS
@@ -17,6 +18,10 @@ while [[ $# -gt 0 ]]; do
     -r|--random)
       random=true
       way="urandom"
+      shift
+      ;;
+    -m|--main)
+      rename_main=true
       shift
       ;;
     *)
@@ -160,10 +165,17 @@ PROCESS_ALL_HARDLINKS="false"
 for item in "${files[@]}"; do
   if [ -e "$item" ]; then
     if [ -d "$item" ]; then
-      # Рекурсивный обход каталога с использованием -depth для обработки содержимого перед каталогом
-      while IFS= read -r -d '' subitem; do
-        process_item "$subitem"
-      done < <(find "$item" -depth -print0)
+      if [ "$rename_main" = true ]; then
+        # Переименовываем корневой каталог и его содержимое
+        while IFS= read -r -d '' subitem; do
+          process_item "$subitem"
+        done < <(find "$item" -depth -print0)
+      else
+        # Переименовываем только содержимое каталога, исключая сам корневой каталог
+        while IFS= read -r -d '' subitem; do
+          process_item "$subitem"
+        done < <(find "$item" -mindepth 1 -depth -print0)
+      fi
     else
       process_item "$item"
     fi
