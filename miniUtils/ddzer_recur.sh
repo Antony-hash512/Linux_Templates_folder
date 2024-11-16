@@ -29,7 +29,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# Функция для создания временного имени и переименования файла
+# Функция для создания временного имени и переименования файла или каталога
 rename_to_temp() {
   local path="$1"
   local dir=$(dirname "$path")
@@ -37,11 +37,11 @@ rename_to_temp() {
   local tmp_name="$(tr -dc 'a-zA-Z0-9' < /dev/urandom | head -c 16)"
   # Альтернатива для длинных путей
   #local tmp_name="$(tr -dc 'a-zA-Z0-9' < /dev/urandom | head -c $(( orig_len < 16 ? 16 : orig_len )))"
-  # Убеждаемся что новое имя не короче оригинального
+  # Убеждаемся, что новое имя не короче оригинального
   while [ ${#tmp_name} -lt ${#path} ]; do
     tmp_name="${tmp_name}_"
   done
-  # Добавляем суффикс .tmp и время unix чтобы точно избежать коллизий
+  # Добавляем суффикс .tmp и время unix, чтобы точно избежать коллизий
   tmp_name="${dir}/${tmp_name}_$(date +%s).tmp"
   mv "$path" "$tmp_name"
   if [ -d "$tmp_name" ]; then
@@ -54,14 +54,11 @@ rename_to_temp() {
 # Функция для обработки файла
 process_file() {
   local file="$1"
-  # Получаем директорию, где находится файл
-
   size=$(stat --format=%s "$file")
   # Округление размера до ближайшего большего, кратного 4096
   rounded_size=$(( (size + 4095) / 4096 * 4096 ))
   dd if=/dev/$way of="$file" bs=4096 count=$((rounded_size / 4096)) status=none
   echo "Файл $file перезаписан $rounded_size $([ "$way" = "zero" ] && echo "нулями" || echo "случайными байтами")."
-
   rename_to_temp "$file"
 }
 
@@ -144,23 +141,34 @@ handle_hardlink() {
     fi
 }
 
+# Функция для обработки файлов и каталогов
+process_item() {
+  local item="$1"
+  if [ -f "$item" ]; then
+    handle_hardlink "$item"
+  elif [ -d "$item" ]; then
+    rename_to_temp "$item"
+  else
+    check_unusual_file "$item"
+  fi
+}
+
 # Инициализация глобальной переменной для отслеживания выбора "all"
 PROCESS_ALL_HARDLINKS="false"
 
 # Перебор каждого файла/каталога в списке
 for item in "${files[@]}"; do
-  if [ -f "$item" ]; then
-    handle_hardlink "$item"
-  elif [ -d "$item" ]; then
-    # Рекурсивный обход каталога
-    while IFS= read -r -d '' file; do
-      if [ -f "$file" ]; then
-        handle_hardlink "$file"
-      else
-        check_unusual_file "$file"
-      fi
-    done < <(find "$item" -print0)
+  if [ -e "$item" ]; then
+    if [ -d "$item" ]; then
+      # Рекурсивный обход каталога с использованием -depth для обработки содержимого перед каталогом
+      while IFS= read -r -d '' subitem; do
+        process_item "$subitem"
+      done < <(find "$item" -depth -print0)
+    else
+      process_item "$item"
+    fi
   else
     echo "Путь $item не найден."
   fi
 done
+
