@@ -1,0 +1,9 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Your Application Name
+Comment=Brief description of the application
+Exec=/path/to/your/application %U
+Icon=/path/to/your/icon.png
+Terminal=false
+Categories=Utility;Application;
