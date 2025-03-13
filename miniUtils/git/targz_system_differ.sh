@@ -51,25 +51,47 @@ if ! git ls-tree -r "$BRANCH1" | grep -q "$ARCHIVE"; then
 fi
 
 TMPDIR1=$(mktemp -d)
+TMPDIR2=$(mktemp -d)
 
 # Очистка временных файлов при выходе
-trap "rm -rf $TMPDIR1" EXIT
+trap "rm -rf $TMPDIR1 $TMPDIR2" EXIT
 
 cd "$PATH2REP" || { echo "Не удалось перейти в $PATH2REP" >&2; exit 1; }
 
 echo "Извлечение $ARCHIVE из ветки $BRANCH1..."
 git show "$BRANCH1:$ARCHIVE" | tar -xzf - -C "$TMPDIR1"
 
+# записывает в список список файлов
+LIST_FILES=$(ls -R "$TMPDIR1")
+
 
 # Если имя архива начинается с root, то...
 if [[ "$ARCHIVE" == "rootfiles.tar.gz" ]]; then
-    # сравниваем файлы в /
-    sudo meld "$TMPDIR1" /
+    START_PATH="/"
+    IS_ROOT=true
 else
-    # сравниваем файлы в $HOME
-    meld "$TMPDIR1" "$HOME"
+    START_PATH="$HOME/"
+    IS_ROOT=false
 fi
 
+# копирует файлы в списке в нужную директорию
+if [ "$IS_ROOT" = true ]; then
+    # получаем имя пользователя
+    USER=$(whoami)
+    for FILE in $LIST_FILES; do
+        sudo cp -r "$START_PATH$FILE" "$TMPDIR2/$FILE"
+    done
+    # меняем владельца файлов на пользователя
+    sudo chown -R $USER:$USER "$TMPDIR2"
+else
+    for FILE in $LIST_FILES; do
+        cp -r "$START_PATH$FILE" "$TMPDIR2/$FILE"
+    done
+fi
 
+# сравниваем файлы в директориях
+meld "$TMPDIR1" "$TMPDIR2"
 
+# удаляем временные директории
+rm -rf "$TMPDIR1" "$TMPDIR2"
 
