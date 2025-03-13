@@ -61,8 +61,8 @@ cd "$PATH2REP" || { echo "Не удалось перейти в $PATH2REP" >&2; 
 echo "Извлечение $ARCHIVE из ветки $BRANCH1..."
 git show "$BRANCH1:$ARCHIVE" | tar -xzf - -C "$TMPDIR1"
 
-# записывает в список список файлов
-LIST_FILES=$(ls -R "$TMPDIR1")
+# записывает в список список файлов (включая скрытые)
+LIST_FILES=$(ls -Ra "$TMPDIR1")
 
 
 # Если имя архива начинается с root, то...
