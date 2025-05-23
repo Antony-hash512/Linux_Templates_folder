@@ -6,6 +6,8 @@ if [[ "$EUID" -ne 0 ]]; then
     exit 1
 fi
 
+trap 'cleanup_all' EXIT
+
 # Определение цветовых переменных
 RED='\033[31m'
 GREEN='\033[32m'
@@ -21,6 +23,69 @@ NC='\033[0m'
 
 #инициализация временного файла для точек монтирования (нужно в начале)
 > /tmp/btrfs_temp_mounts.txt
+
+
+#архиважная функция очистки для заворачивания в trap
+cleanup_all(){
+    #размонтируем временные точки монтирования btrfs
+    if [ -f /tmp/btrfs_temp_mounts.txt ]; then
+        echo -e "${CYAN}Список временных точек монтирования:${NC}"
+        cat /tmp/btrfs_temp_mounts.txt
+    
+        while read -r mountpoint; do
+            if [ -z "$mountpoint" ]; then
+                continue
+            fi
+        
+            echo -e "${GRAY}${ITALIC}${UNDERLINE}Размонтируем точку монтирования $mountpoint${NC}"
+            if umount "$mountpoint"; then
+                echo -e "${GREEN}Успешно размонтировано: $mountpoint${NC}"
+                # Удаляем временный каталог, если он был создан с помощью mktemp
+                if [[ "$mountpoint" == /tmp/tmp.* ]]; then
+                    rmdir "$mountpoint" 2>/dev/null
+                fi
+            else
+                echo -e "${RED}Ошибка при размонтировании: $mountpoint${NC}"
+                echo -e "${YELLOW}Попробуем принудительное размонтирование...${NC}"
+                if umount -f "$mountpoint"; then
+                    echo -e "${GREEN}Успешно размонтировано с флагом -f: $mountpoint${NC}"
+                    # Удаляем временный каталог, если он был создан с помощью mktemp
+                    if [[ "$mountpoint" == /tmp/tmp.* ]]; then
+                        rmdir "$mountpoint" 2>/dev/null
+                    fi
+                else
+                    echo -e "${RED}Не удалось размонтировать даже с флагом -f: $mountpoint${NC}"
+                    echo -e "${YELLOW}Проверьте, не используются ли файлы на этой точке монтирования.${NC}"
+                    lsof | grep "$mountpoint" || echo "Файлы не найдены в использовании"
+                fi
+            fi
+        done < /tmp/btrfs_temp_mounts.txt
+    
+        # Очищаем файл
+        > /tmp/btrfs_temp_mounts.txt
+    else
+        echo -e "${YELLOW}Нет временных точек монтирования для размонтирования${NC}"
+    fi
+    #cleanup_dummy_device
+    if [[ -n $dummy_dev ]]; then
+        #парсим имя файла из комманды
+        filename=$(losetup $dummy_dev | sed -n 's/.*(\(.*\))/\1/p')
+        losetup -d $dummy_dev
+
+        if [[ -f "$filename" ]]; then
+            echo "Удаляем файл: $filename"
+            rm -f "$filename"
+        else
+            echo -e "${RED}Ошибка: файл $filename не существует${NC}" >&2
+        fi
+    fi
+
+    #удаляем временные файлы
+    rm -f $LSBLK_RAW_INFO
+    rm -f $LSBLK_RAW_INFO_UPDATED
+}
+
+
 
 one_line() {
     # Получаем данные из первого аргумента
@@ -146,6 +211,16 @@ while IFS= read -r line; do
             device_fullname="/dev/mapper/$device_basename"
         elif [[ "$(echo "$line" | awk '{print $2}')" == "part" ]]; then
             device_fullname="/dev/$device_basename"
+        elif [[ "$(echo "$line" | awk '{print $2}')" == "crypt" ]]; then
+            device_fullname=/dev/mapper/$device_basename
+            #сюда нужно добавить определние имени устройства
+        #else
+            #фича, которая скорее всего не понадобится, но ввыедена для доп. подстраховки
+            #if [[ -z "$dummy_dev" || ! -b "$dummy_dev" ]]; then
+            #    dummy_dev=$(create_btrfs_dummy_device 128M)
+            #fi
+            #device_fullname=$dummy_dev
+            #echo -e "${RED} неизвестный тип раздела, используем временную заглушки, чтобы не возникло дополнительных ошибок${NC}" >&2
         fi
         #используем функцию get_btrfs_subvolumes
         #если вывод пустой, то выводим сообщение об отсутствии сабволюмов и не делаем дальнейших проверок
