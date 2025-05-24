@@ -11,7 +11,7 @@ export ZSTD_CLEVEL=$COMPRESSION_LEVEL
 
 INPUT_ARCH=$1
 
-INPUT_ARCH_BASENAME=$(basename "$INPUT_ARCH" .tar.*)
+INPUT_ARCH_BASENAME=$(echo "$INPUT_ARCH" | sed 's/\.tar\..*//')
 
 if [ ! -f "$INPUT_ARCH" ]; then
     echo "Input archive not found"
